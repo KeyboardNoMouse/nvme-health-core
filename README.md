@@ -114,12 +114,6 @@ Click **Upload CSV** on the Fleet tab. A sample file is linked on that page. Req
 
 `Drive_ID` is optional. Vendor, model and firmware values should match those seen in training (`VendorA`–`VendorD`, `Model-LITE/PRO/ULTRA/X1/X2`, `FW1.0`–`FW2.1`); unknown values are treated as none-of-the-above.
 
-## Deployment
-
-**Vercel:** import the repository, set **Root Directory** to `web`, and deploy. No environment variables are needed.
-
-The same `web` folder works on any static-capable Node host (Netlify, Cloudflare Pages, etc.).
-
 ## Limitations
 
 - **Snapshot data, not history.** Each row is one reading of a drive, so the model answers "does this drive look like the ones that failed?", not "how long until it fails?". Production predictive maintenance needs repeated SMART snapshots per drive over time.
