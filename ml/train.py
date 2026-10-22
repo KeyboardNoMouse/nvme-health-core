@@ -31,9 +31,28 @@ metrics = dict(threshold=round(thr, 3), pr_auc=round(average_precision_score(yte
     n_train=len(ytr), n_test=len(yte), base_rate=round(float(y.mean()), 4))
 print(metrics)
 
+# 2b) stage 2: which failure pattern is it? Trained on failing drives only (never on Failure_Mode as an input)
+MODE_IDS, MODE_NAMES = [1, 4, 5], ["Wear-out", "Controller / firmware", "Early-life"]
+fi = np.where(y == 1)[0]
+Xf, yf = X.iloc[fi], df.Failure_Mode.values[fi]
+mk_mode = lambda: RandomForestClassifier(n_estimators=100, max_depth=6, min_samples_leaf=2,
+        class_weight="balanced", n_jobs=-1, random_state=42)
+oof_mode = cross_val_predict(mk_mode(), Xf, yf, cv=StratifiedKFold(5, shuffle=True, random_state=11))
+mode_metrics = dict(n=int(len(yf)), accuracy=round(float((oof_mode == yf).mean()), 3),
+    recall={n: round(float((oof_mode[yf == i] == i).mean()), 3) for i, n in zip(MODE_IDS, MODE_NAMES)},
+    support={n: int((yf == i).sum()) for i, n in zip(MODE_IDS, MODE_NAMES)})
+print("mode model (5-fold CV on failing drives):", mode_metrics)
+mode_final = mk_mode().fit(Xf, yf)
+assert list(mode_final.classes_) == MODE_IDS
+
 # 3) final model on all data -> export; fleet scores are out-of-fold so the dashboard isn't self-flattering
 final = mk().fit(X, y)
 fleet_p = cross_val_predict(mk(), X, y, cv=StratifiedKFold(5, shuffle=True, random_state=7), method="predict_proba")[:, 1]
+
+def mtree(t):
+    st = t.tree_; v = st.value[:, 0, :]; v = v / v.sum(1, keepdims=True)
+    return dict(f=st.feature.tolist(), t=[round(float(x), 5) for x in st.threshold],
+                l=st.children_left.tolist(), r=st.children_right.tolist(), v=[[round(float(x), 3) for x in r] for r in v])
 
 def tree(t):
     s = t.tree_
@@ -47,11 +66,16 @@ print([(a, round(b, 3)) for a, b in imp[:8]])
     features=list(X.columns), threshold=thr, metrics=metrics,
     medians={c: float(X[c].median()) for c in X.columns},
     importances={a: round(float(b), 4) for a, b in imp},
+    mode_names=MODE_NAMES, mode_ids=MODE_IDS, mode_metrics=mode_metrics,
+    mode_trees=[mtree(e) for e in mode_final.estimators_],
     trees=[tree(e) for e in final.estimators_]), separators=(",", ":")))
 
 fleet = df[["Drive_ID", "Vendor", "Model", "Firmware_Version", "Power_On_Hours", "Percent_Life_Used",
             "Temperature_C", "Media_Errors", "Read_Error_Rate", "Failure_Flag"]].copy()
 fleet["risk"] = np.round(fleet_p, 4)
+lm = mode_final.predict(X)                      # healthy drives were never in the mode training set
+lm[fi] = oof_mode                               # failing drives get out-of-fold predictions
+fleet["likely_mode"] = lm
 fleet.to_csv(OUT / "fleet_scored.csv", index=False)
 df.drop(columns=["SMART_Warning_Flag", "Failure_Mode", "Failure_Flag"]).sample(300, random_state=3).to_csv(
     OUT / "sample_upload.csv", index=False)

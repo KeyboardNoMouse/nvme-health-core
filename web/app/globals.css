@@ -13,3 +13,4 @@ button{cursor:pointer}button.on,button.pri{background:var(--acc);color:#04111f;b
 .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:4px 0 10px}.bar>i{display:block;height:100%;background:var(--acc)}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--mut);font-weight:400;cursor:pointer}
 .scroll{overflow-x:auto}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}.mut{color:var(--mut)}
+.g3{grid-template-columns:repeat(3,1fr)}@media(max-width:800px){.g3{grid-template-columns:1fr}}

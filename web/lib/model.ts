@@ -1,6 +1,9 @@
 // In-browser inference for the exported Random Forest. Feature engineering mirrors ml/features.py.
 export type Tree = { f: number[]; t: number[]; l: number[]; r: number[]; v: number[] };
+export type MTree = { f: number[]; t: number[]; l: number[]; r: number[]; v: number[][] };
 export type Model = {
+  mode_names: string[]; mode_ids: number[]; mode_trees: MTree[];
+  mode_metrics: { n: number; accuracy: number; recall: Record<string, number>; support: Record<string, number> };
   features: string[]; threshold: number; trees: Tree[];
   medians: Record<string, number>; importances: Record<string, number>;
   metrics: { pr_auc: number; roc_auc: number; precision: number; recall: number; tp: number; fp: number; fn: number; tn: number; n_test: number };
@@ -40,6 +43,22 @@ export function risk(m: Model, d: Drive): number {
     s += t.v[i];
   }
   return s / m.trees.length;
+}
+
+/** Stage 2: if this drive fails, which pattern does it look like? (probabilities in mode_ids order) */
+export function modeProbs(m: Model, d: Drive): number[] {
+  const x = featurize(d), v = m.features.map((n) => x[n]);
+  const acc = m.mode_ids.map(() => 0);
+  for (const t of m.mode_trees) {
+    let i = 0;
+    while (t.l[i] !== -1) i = v[t.f[i]] <= t.t[i] ? t.l[i] : t.r[i];
+    t.v[i].forEach((p, k) => (acc[k] += p));
+  }
+  return acc.map((a) => a / m.mode_trees.length);
+}
+export function topMode(m: Model, d: Drive): number {
+  const p = modeProbs(m, d);
+  return m.mode_ids[p.indexOf(Math.max(...p))];
 }
 
 /** What pushes this drive's risk up? Replace each input with the fleet median and measure the drop. */
